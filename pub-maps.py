@@ -8,10 +8,8 @@ from PIL import Image
 def main():
     options = parse_options()
     pubs = augment_pubs(filter_pubs(options, read_pubs(options)))
-
-    print("\n".join([format_pub(p) for p in pubs]))
-    
-    pub_map = PubMap(pubs)
+    bounding_box = pub_bounding_box(options, pubs)
+    pub_map = PubMap(options, bounding_box)
     pub_map.save("Woking.jpg")
 
 def parse_options():
@@ -34,44 +32,60 @@ def augment_pubs(pubs):
         pub["Northings"] = grid.N
     return pubs
 
-def format_pub(pub):
-    return "{} ({}, {}) {}".format(pub["Name"], pub["Eastings"], pub["Northings"], pub["OSRef"])
+def pub_bounding_box(options, pubs):
+    margin = 200
+    return (
+        min([p["Eastings"] for p in pubs]) - margin,
+        min([p["Northings"] for p in pubs]) - margin,
+        max([p["Eastings"] for p in pubs]) + margin,
+        max([p["Northings"] for p in pubs]) + margin,
+        )
 
 class PubMap:
-    def __init__(self, pubs):
-        min_easting = min([p["Eastings"] for p in pubs])
-        min_northing = min([p["Northings"] for p in pubs])
-        max_easting = max([p["Eastings"] for p in pubs])
-        max_northing = max([p["Northings"] for p in pubs])
-
-        start_easting = min_easting - min_easting % 5000
-        start_northing = min_northing - min_northing % 5000
-        end_easting = max_easting - max_easting % 5000 + 4999
-        end_northing = max_northing - max_northing % 5000 + 4999
-
-        tiles = []
+    def __init__(self, options, bounding_box):
+        self.width = (297 - 10) * 300 / 25.4
+        self.height = (210 - 10) * 300 / 25.4
+        self.bounding_box = bounding_box
         self.image = Image.new(
-            'RGB',
-            (end_easting - start_easting + 1, end_northing - start_northing + 1)
+            "RGB",
+            (self.width, self.height)
         )
-        for northing in range(start_northing, end_northing, 5000):
-            for easting in range(start_easting, end_easting, 5000):
-                square_origin = str(OSGridConverter.OSGridReference(easting, northing))
-                filename = os.path.join(
-                    square_origin[0:2],
-                    square_origin[0:2] +
-                    square_origin[3] +
-                    square_origin[9] +
-                    (square_origin[10] < "5" and "S" or "N") +
-                    (square_origin[4] < "5" and "W" or "E") +
-                    ".tif"
+        
+    def load_tiles(self):
+        tile_eastings = range(self.bounding_box[0] - self.bounding_box[0] % 5000, self.bounding_box[1], 5000)
+        tile_northings = range(self.bounding_box[1] - self.bounding_box[1] % 5000, self.bounding_box[3], 5000)
+        tile_northings.reverse()
+
+
+        alltiles = Image.new(
+            'RGB',
+            (len(tile_eastings) * 5000, len(tile_northings) * 5000)
+        )
+        
+        for across, eastings in enumerate(tile_eastings):
+            for down, northings in enumerate(tile_northings):
+                alltiles.paste(
+                    Image.open(tile_filename(eastings, northings)).convert('RGB'),
+                    (across * 5000, down * 5000)
                 )
-                self.image.paste(
-                    Image.open(filename).convert('RGB'),
-                    (easting - start_easting, end_northing - northing - 4999)
-                )
+            
+
 
     def save(self, filename):
         self.image.save(filename)
+
+        
+def tile_filename(eastings, northings);
+    square_origin = str(OSGridConverter.OSGridReference(easting, northing))
+    return os.path.join(
+        square_origin[0:2],
+        square_origin[0:2] +
+        square_origin[3] +
+        square_origin[9] +
+        (square_origin[10] < "5" and "S" or "N") +
+        (square_origin[4] < "5" and "W" or "E") +
+        ".tif"
+    )
+
 
 main()

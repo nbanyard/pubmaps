@@ -1,0 +1,8 @@
+.*.swp
+.*.swo
+pubs.csv
+.DS_Store
+OS OpenMap*/
+*.jpg
+*.tif
+/??
